@@ -136,7 +136,7 @@ class ResumeParser:
         
         years = [int(y) for y in years]
         if len(years) >= 2:
-            return min(years[-1] - years, 20)  # Cap at 20 years
+            return min(years[-1] - years[0], 20)  # Cap at 20 years
         return 0
     
     def parse_resume(self, pdf_path: str) -> ResumeData:

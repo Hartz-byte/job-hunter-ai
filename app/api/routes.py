@@ -18,7 +18,7 @@ import json
 # Initialize FastAPI
 app = FastAPI(
     title="AI Job Hunter (Free)",
-    description="Job hunting with local LLMs - Zero API costs",
+    description="Job hunting with local LLMs",
     version="1.0.0"
 )
 
@@ -41,12 +41,39 @@ letter_gen = CoverLetterGenerator()
 current_user_resume = None
 current_user_id = None
 
+def ensure_user_loaded():
+    """Recover user session from DB if global state is lost"""
+    global current_user_resume, current_user_id
+    
+    if current_user_resume and current_user_id:
+        return True
+        
+    try:
+        db = get_db_session()
+        # Get latest user
+        user = db.query(User).order_by(User.created_at.desc()).first()
+        if user and user.resume_data:
+            current_user_resume = ResumeData(**user.resume_data)
+            current_user_id = user.id
+            db.close()
+            return True
+        db.close()
+    except Exception as e:
+        print(f"Error restoring user session: {e}")
+        
+    return False
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and AI models"""
     global matcher
     print("Initializing application...")
     init_db()
+    
+    # Try to restore session
+    if ensure_user_loaded():
+        print(f"Restored session for user: {current_user_id}")
+        
     print("Loading AI models (first-time download may take a moment)...")
     matcher = JobMatcher(config.OLLAMA_EMBEDDING_MODEL)
     print("Ready to serve requests!")
@@ -100,7 +127,10 @@ async def upload_resume(file: UploadFile = File(...)):
 @app.post("/api/preferences/set")
 async def set_preferences(preferences: JobPreferences):
     """Set job search preferences"""
+    global current_user_id
     try:
+        ensure_user_loaded()
+        
         if not current_user_id:
             return JSONResponse(
                 status_code=400,
@@ -156,7 +186,10 @@ async def search_jobs(
 @app.post("/api/jobs/match")
 async def match_jobs(query: str, limit: int = 10):
     """Find and rank jobs matching resume"""
+    global matcher, current_user_resume
     try:
+        ensure_user_loaded()
+        
         if not current_user_resume:
             return JSONResponse(
                 status_code=400,
@@ -215,7 +248,10 @@ async def generate_tailored_resume(
     output_format: str = "pdf"
 ):
     """Generate tailored resume"""
+    global current_user_resume, current_user_id
     try:
+        ensure_user_loaded()
+        
         if not current_user_resume:
             return JSONResponse(
                 status_code=400,
@@ -256,7 +292,10 @@ async def generate_cover_letter(
     job_description: str = ""
 ):
     """Generate cover letter"""
+    global current_user_resume, current_user_id
     try:
+        ensure_user_loaded()
+        
         if not current_user_resume:
             return JSONResponse(
                 status_code=400,
