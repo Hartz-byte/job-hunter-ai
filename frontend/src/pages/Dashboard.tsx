@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/services/api';
 import type { Job, MatchResult } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -17,14 +17,30 @@ export default function Dashboard() {
     const [activeJob, setActiveJob] = useState<Job | null>(null);
     const [generating, setGenerating] = useState<{ [key: string]: boolean }>({});
 
-    const handleSearch = async () => {
-        if (!query.trim()) return;
+    useEffect(() => {
+        const initDashboard = async () => {
+            try {
+                const user = await api.getUser();
+                if (user && user.preferences && user.preferences.job_title) {
+                    const initialQuery = user.preferences.job_title;
+                    setQuery(initialQuery);
+                    handleSearchInternal(initialQuery);
+                }
+            } catch (error) {
+                console.log("No active user session or failed to load preferences");
+            }
+        };
+        initDashboard();
+    }, []);
+
+    const handleSearchInternal = async (searchQuery: string) => {
+        if (!searchQuery.trim()) return;
         setLoading(true);
         setJobs([]);
         setActiveJob(null);
         try {
             // First search, then match
-            const response = await api.matchJobs(query);
+            const response = await api.matchJobs(searchQuery);
             if (response.status === 'success') {
                 setJobs(response.jobs);
                 if (response.jobs.length > 0) {
@@ -37,6 +53,10 @@ export default function Dashboard() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSearch = () => {
+        handleSearchInternal(query);
     };
 
     const toggleSelection = (id: string, e: React.MouseEvent) => {
@@ -93,7 +113,7 @@ export default function Dashboard() {
                 <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search for jobs (e.g. React Developer in Bangalore)..."
+                        placeholder="Search for jobs (e.g. AI Researcher in New York)..."
                         className="pl-8"
                         value={query}
                         onChange={e => setQuery(e.target.value)}
@@ -143,9 +163,10 @@ export default function Dashboard() {
 
                             <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 <Badge variant="secondary" className={cn(
-                                    item.match_score > 80 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" :
-                                        item.match_score > 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" :
-                                            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                                    item.match_score > 80 ? "bg-green-500/20 text-green-500 hover:bg-green-500/30 border-green-500/50" :
+                                        item.match_score > 50 ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 border-yellow-500/50" :
+                                            "bg-red-500/20 text-red-500 hover:bg-red-500/30 border-red-500/50",
+                                    "border"
                                 )}>
                                     {item.match_score}% Match
                                 </Badge>

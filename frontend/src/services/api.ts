@@ -18,6 +18,11 @@ export const api = {
         return response.data;
     },
 
+    getUser: async () => {
+        const response = await axios.get(`${API_Base}/user/me`);
+        return response.data;
+    },
+
     searchJobs: async (query: string, filters: any = {}) => {
         const params = new URLSearchParams({ query, ...filters });
         const response = await axios.post(`${API_Base}/jobs/search?${params.toString()}`);

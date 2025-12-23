@@ -86,7 +86,7 @@ export default function Preferences() {
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Job Title</label>
                             <Input
-                                placeholder="e.g. Frontend Engineer"
+                                placeholder="e.g. Machine Learning Engineer"
                                 value={formData.job_title}
                                 onChange={e => setFormData({ ...formData, job_title: e.target.value })}
                             />
@@ -126,7 +126,7 @@ export default function Preferences() {
                         <label className="text-sm font-medium">Locations</label>
                         <div className="flex gap-2">
                             <Input
-                                placeholder="Add a location (e.g. Bangalore, Remote)"
+                                placeholder="Add a location (e.g. San Francisco, Remote)"
                                 value={locationInput}
                                 onChange={e => setLocationInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleAddLocation()}
@@ -170,7 +170,7 @@ export default function Preferences() {
                         <label className="text-sm font-medium">Required Skills</label>
                         <div className="flex gap-2">
                             <Input
-                                placeholder="Add skill (e.g. React, Python)"
+                                placeholder="Add skill (e.g. PyTorch, TensorFlow, NLP)"
                                 value={skillInput}
                                 onChange={e => setSkillInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleAddSkill()}

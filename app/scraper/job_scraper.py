@@ -1,6 +1,6 @@
 from app.scraper.sources.indeed import IndeedScraper
-from app.scraper.sources.github import GitHubJobsScraper
-from app.scraper.sources.stackoverflow import StackOverflowScraper
+from app.scraper.sources.linkedin import LinkedInJobsScraper
+from app.scraper.sources.remoteok import RemoteOKScraper
 from app.database.database import get_db_session
 from app.database.models import Job
 from typing import List, Optional
@@ -11,9 +11,11 @@ class JobScraper:
     """Unified job scraper"""
     
     def __init__(self):
-        self.indeed = IndeedScraper()
-        self.github = GitHubJobsScraper()
-        self.stackoverflow = StackOverflowScraper()
+        self.sources = [
+            LinkedInJobsScraper(),
+            RemoteOKScraper(),
+            IndeedScraper(),
+        ]
     
     def search_all_sources(
         self,
@@ -28,43 +30,30 @@ class JobScraper:
         
         print(f"Scraping jobs for: {query} in {location}")
         
-        # GitHub Jobs (easiest, API-based)
-        try:
-            print("Scraping GitHub Jobs...")
-            github_jobs = self.github.search_jobs(query, location, limit=limit//3)
-            all_jobs.extend(github_jobs)
-            print(f"Found {len(github_jobs)} jobs on GitHub")
-        except Exception as e:
-            print(f"GitHub scraping error: {e}")
-        
-        # Stack Overflow
-        try:
-            print("Scraping Stack Overflow...")
-            so_jobs = self.stackoverflow.search_jobs(
-                query,
-                location=location,
-                experience_level=experience_level,
-                limit=limit//3
-            )
-            all_jobs.extend(so_jobs)
-            print(f"Found {len(so_jobs)} jobs on Stack Overflow")
-        except Exception as e:
-            print(f"Stack Overflow scraping error: {e}")
-        
-        # Indeed (if you want, comment out if too slow)
-        try:
-            print("Scraping Indeed...")
-            indeed_jobs = self.indeed.search_jobs(
-                query,
-                location=location,
-                job_type=job_type,
-                experience_level=experience_level,
-                limit=limit//3
-            )
-            all_jobs.extend(indeed_jobs)
-            print(f"Found {len(indeed_jobs)} jobs on Indeed")
-        except Exception as e:
-            print(f"Indeed scraping error: {e}")
+        import uuid
+
+        for source in self.sources:
+            try:
+                source_name = source.__class__.__name__
+                print(f"Scraping {source_name}...")
+                
+                # Dynamic dispatch based on signature would be better, but simpler here:
+                if isinstance(source, RemoteOKScraper):
+                     # RemoteOK is global/remote, location might filter it
+                     jobs = source.search_jobs(query, location, limit=limit)
+                else:
+                    jobs = source.search_jobs(query, location, limit=limit)
+                
+                # Assign unique IDs to transient jobs
+                for job in jobs:
+                    if 'id' not in job:
+                        job['id'] = str(uuid.uuid4())
+
+                print(f"Found {len(jobs)} jobs on {source_name}")
+                all_jobs.extend(jobs)
+                
+            except Exception as e:
+                print(f"Error scraping {source.__class__.__name__}: {e}")
         
         return all_jobs[:limit]
     

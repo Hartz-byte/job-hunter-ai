@@ -149,6 +149,33 @@ async def set_preferences(preferences: JobPreferences):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+@app.get("/api/user/me")
+async def get_current_user():
+    """Get current user data"""
+    global current_user_id, current_user_resume
+    try:
+        ensure_user_loaded()
+        
+        if not current_user_id:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "No active session"}
+            )
+            
+        db = get_db_session()
+        user = db.query(User).filter(User.id == current_user_id).first()
+        
+        response_data = {
+            "id": user.id,
+            "resume": user.resume_data,
+            "preferences": user.preferences
+        }
+        db.close()
+        
+        return response_data
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.post("/api/jobs/search")
 async def search_jobs(
     query: str,
@@ -267,14 +294,22 @@ async def generate_tailored_resume(
         # Export
         filename = f"{current_user_id}_resume_{job_title.replace(' ', '_')}"
         if output_format == "pdf":
-            output_path = f"generated_docs/{filename}.pdf"
-            tailor.html_to_pdf(html, output_path)
+            try:
+                output_path = f"generated_docs/{filename}.pdf"
+                tailor.html_to_pdf(html, output_path)
+            except Exception as e:
+                print(f"PDF generation failed, falling back to HTML: {e}")
+                # Fallback to HTML
+                output_path = f"generated_docs/{filename}.html"
+                with open(output_path, "w", encoding="utf-8") as f:
+                    f.write(html)
         else:
             output_path = f"generated_docs/{filename}.docx"
             tailor.html_to_docx(html, output_path)
         
         return {
             "status": "success",
+            "message": "Resume generated (PDF unavailable, using HTML)" if output_path.endswith('.html') else "Resume generated",
             "download_url": f"/api/downloads/{os.path.basename(output_path)}",
             "file_path": output_path
         }
