@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '@/services/api';
 import type { Job, MatchResult } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,18 @@ export default function Dashboard() {
     const [activeJob, setActiveJob] = useState<Job | null>(null);
     const [generating, setGenerating] = useState<{ [key: string]: boolean }>({});
 
+    // Pagination
+    const [page, setPage] = useState(1);
+    const jobsPerPage = 15;
+    const didInit = useRef(false);
+
+    const totalPages = Math.ceil(jobs.length / jobsPerPage);
+    const displayedJobs = jobs.slice((page - 1) * jobsPerPage, page * jobsPerPage);
+
     useEffect(() => {
+        if (didInit.current) return;
+        didInit.current = true;
+
         const initDashboard = async () => {
             try {
                 const user = await api.getUser();
@@ -37,10 +48,11 @@ export default function Dashboard() {
         if (!searchQuery.trim()) return;
         setLoading(true);
         setJobs([]);
+        setPage(1);
         setActiveJob(null);
         try {
             // First search, then match
-            const response = await api.matchJobs(searchQuery);
+            const response = await api.matchJobs(searchQuery, 60); // Request 60 jobs for pagination logic
             if (response.status === 'success') {
                 setJobs(response.jobs);
                 if (response.jobs.length > 0) {
@@ -127,53 +139,83 @@ export default function Dashboard() {
 
             <div className="flex flex-1 gap-6 overflow-hidden">
                 {/* Job List */}
-                <div className="w-1/3 flex flex-col gap-4 overflow-y-auto pr-2">
-                    {jobs.length === 0 && !loading && (
-                        <div className="text-center text-muted-foreground py-10">
-                            No jobs found. Try a different search.
-                        </div>
-                    )}
+                <div className="w-1/3 flex flex-col gap-4 overflow-hidden relative">
+                    <div className="overflow-y-auto flex-1 pr-2 pb-12">
+                        {jobs.length === 0 && !loading && (
+                            <div className="text-center text-muted-foreground py-10">
+                                No jobs found. Try a different search.
+                            </div>
+                        )}
 
-                    {loading && (
-                        <div className="flex justify-center py-10">
-                            <Spinner className="h-8 w-8 text-primary" />
-                        </div>
-                    )}
+                        {loading && (
+                            <div className="flex justify-center py-10">
+                                <Spinner className="h-8 w-8 text-primary" />
+                            </div>
+                        )}
 
-                    {jobs.map((item) => (
-                        <div
-                            key={item.job.id}
-                            onClick={() => setActiveJob(item.job)}
-                            className={cn(
-                                "p-4 rounded-lg border cursor-pointer transition-all hover:bg-accent",
-                                activeJob?.id === item.job.id ? "border-primary bg-accent/50" : "border-border",
-                                "relative group"
-                            )}
-                        >
-                            <div className="absolute top-4 right-4 z-10" onClick={(e) => toggleSelection(item.job.id, e)}>
-                                {selectedJobIds.has(item.job.id) ? (
-                                    <CheckSquare className="h-5 w-5 text-primary" />
-                                ) : (
-                                    <Square className="h-5 w-5 text-muted-foreground opacity-50 group-hover:opacity-100" />
+                        {displayedJobs.map((item) => (
+                            <div
+                                key={item.job.id}
+                                onClick={() => setActiveJob(item.job)}
+                                className={cn(
+                                    "p-4 rounded-lg border cursor-pointer transition-all hover:bg-accent",
+                                    activeJob?.id === item.job.id ? "border-primary bg-accent/50" : "border-border",
+                                    "relative group"
                                 )}
-                            </div>
+                            >
+                                <div className="absolute top-4 right-4 z-10" onClick={(e) => toggleSelection(item.job.id, e)}>
+                                    {selectedJobIds.has(item.job.id) ? (
+                                        <CheckSquare className="h-5 w-5 text-primary" />
+                                    ) : (
+                                        <Square className="h-5 w-5 text-muted-foreground opacity-50 group-hover:opacity-100" />
+                                    )}
+                                </div>
 
-                            <h3 className="font-semibold pr-8 truncate">{item.job.title}</h3>
-                            <div className="text-sm text-muted-foreground truncate">{item.job.company}</div>
+                                <h3 className="font-semibold pr-8 truncate">{item.job.title}</h3>
+                                <div className="text-sm text-muted-foreground truncate">{item.job.company}</div>
 
-                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                <Badge variant="secondary" className={cn(
-                                    item.match_score > 80 ? "bg-green-500/20 text-green-500 hover:bg-green-500/30 border-green-500/50" :
-                                        item.match_score > 50 ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 border-yellow-500/50" :
-                                            "bg-red-500/20 text-red-500 hover:bg-red-500/30 border-red-500/50",
-                                    "border"
-                                )}>
-                                    {item.match_score}% Match
-                                </Badge>
-                                <span className="flex items-center"><MapPin className="h-3 w-3 mr-1" /> {item.job.location}</span>
+                                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                    <Badge variant="secondary" className={cn(
+                                        item.match_score > 80 ? "bg-green-500/20 text-green-500 hover:bg-green-500/30 border-green-500/50" :
+                                            item.match_score > 50 ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 border-yellow-500/50" :
+                                                "bg-red-500/20 text-red-500 hover:bg-red-500/30 border-red-500/50",
+                                        "border"
+                                    )}>
+                                        {item.match_score}% Match
+                                    </Badge>
+                                    <span className="flex items-center"><MapPin className="h-3 w-3 mr-1" /> {item.job.location}</span>
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-5">
+                                        {item.job.source}
+                                    </Badge>
+                                </div>
                             </div>
+                        ))}
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-background/95 backdrop-blur py-2 border-t flex items-center justify-between px-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                            >
+                                Previous
+                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                                Page {page} of {totalPages}
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                            >
+                                Next
+                            </Button>
                         </div>
-                    ))}
+                    )}
                 </div>
 
                 {/* Job Details */}

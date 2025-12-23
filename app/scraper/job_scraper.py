@@ -1,4 +1,3 @@
-from app.scraper.sources.indeed import IndeedScraper
 from app.scraper.sources.linkedin import LinkedInJobsScraper
 from app.scraper.sources.remoteok import RemoteOKScraper
 from app.database.database import get_db_session
@@ -14,7 +13,6 @@ class JobScraper:
         self.sources = [
             LinkedInJobsScraper(),
             RemoteOKScraper(),
-            IndeedScraper(),
         ]
     
     def search_all_sources(

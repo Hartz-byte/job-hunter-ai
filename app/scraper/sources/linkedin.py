@@ -20,10 +20,21 @@ class LinkedInJobsScraper:
     RSS_BASE = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting"
     
     def __init__(self):
+        # Use recent Chrome headers
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
         }
         self.session = requests.Session()
+        self.session.headers.update(self.headers)
     
     def search_jobs_rss(
         self,
@@ -34,70 +45,99 @@ class LinkedInJobsScraper:
         """
         Search LinkedIn jobs using public job search endpoint (RSS-style).
         This is more respectful to LinkedIn's servers.
+        Currently implements pagination to fetch up to 'limit' jobs.
         """
         jobs = []
+        start = 0
+        batch_size = 25 # Be reasonable with batch sizes
+        retries = 3
         
-        try:
-            # LinkedIn Jobs search endpoint (unofficial but public)
-            search_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-            
-            params = {
-                'keywords': query,
-                'location': location,
-                'geoId': '102713980',  # India geo ID
-                'start': 0,
-                'count': min(limit, 25),
-                'position': 1,
-                'pageNum': 0,
-                'sortBy': 'DD'  # Most recent
-            }
-            
-            response = self.session.get(
-                search_url,
-                params=params,
-                headers=self.headers,
-                timeout=10
-            )
-            
-            # Parse response
-            if response.status_code == 200:
+        while len(jobs) < limit:
+            for attempt in range(retries):
                 try:
-                    # LinkedIn returns HTML, parse it
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                    job_cards = soup.find_all('div', class_='base-card')
+                    # LinkedIn Jobs search endpoint (unofficial but public)
+                    search_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
                     
-                    for card in job_cards[:limit]:
+                    params = {
+                        'keywords': query,
+                        'location': location,
+                        'geoId': '102713980',  # India geo ID
+                        'start': start,
+                        'count': min(limit - len(jobs), batch_size),
+                        'position': 1,
+                        'pageNum': start // batch_size,
+                        'sortBy': 'DD'  # Most recent
+                    }
+                    
+                    response = self.session.get(
+                        search_url,
+                        params=params,
+                        headers=self.headers,
+                        timeout=15
+                    )
+                    
+                    if response.status_code == 200:
                         try:
-                            # Extract job details
-                            title_elem = card.find('h3', class_='base-search-card__title')
-                            company_elem = card.find('h4', class_='base-search-card__subtitle')
-                            location_elem = card.find('span', class_='job-search-card__location')
-                            link_elem = card.find('a', class_='base-card__full-link')
+                            soup = BeautifulSoup(response.content, 'html.parser')
+                            job_cards = soup.find_all('div', class_='base-card')
                             
-                            if title_elem and company_elem:
-                                job = {
-                                    'title': title_elem.get_text(strip=True),
-                                    'company': company_elem.get_text(strip=True),
-                                    'location': location_elem.get_text(strip=True) if location_elem else location,
-                                    'description': card.get_text(strip=True)[:500],
-                                    'url': link_elem.get('href', '') if link_elem else '',
-                                    'source': 'linkedin',
-                                    'posted_date': datetime.now(),
-                                    'job_type': 'not specified',
-                                    'experience_level': 'not specified'
-                                }
-                                jobs.append(job)
+                            if not job_cards:
+                                print(f"[LinkedIn] No more jobs found at start={start}")
+                                return jobs # End of results
+                                
+                            print(f"[LinkedIn] Fetched {len(job_cards)} jobs (offset {start})")
+                            
+                            for card in job_cards:
+                                if len(jobs) >= limit:
+                                    break
+                                    
+                                try:
+                                    # Extract job details
+                                    title_elem = card.find('h3', class_='base-search-card__title')
+                                    company_elem = card.find('h4', class_='base-search-card__subtitle')
+                                    location_elem = card.find('span', class_='job-search-card__location')
+                                    link_elem = card.find('a', class_='base-card__full-link')
+                                    
+                                    if title_elem and company_elem:
+                                        job = {
+                                            'title': title_elem.get_text(strip=True),
+                                            'company': company_elem.get_text(strip=True),
+                                            'location': location_elem.get_text(strip=True) if location_elem else location,
+                                            'description': card.get_text(strip=True)[:500],
+                                            'url': link_elem.get('href', '') if link_elem else '',
+                                            'source': 'linkedin',
+                                            'posted_date': datetime.now(),
+                                            'job_type': 'not specified',
+                                            'experience_level': 'not specified'
+                                        }
+                                        jobs.append(job)
+                                except Exception as e:
+                                    continue
+                                    
+                            start += len(job_cards)
+                            break # Success, break retry loop
+                            
                         except Exception as e:
-                            print(f"Error parsing LinkedIn job card: {e}")
-                            continue
+                            print(f"Error parsing LinkedIn response: {e}")
+                            break
+                    else:
+                        print(f"LinkedIn request failed with code {response.status_code}")
+                        time.sleep(2 * (attempt + 1))
+                
+                except requests.exceptions.ConnectionError as e:
+                     print(f"LinkedIn Connection Error (Attempt {attempt+1}/{retries}): {e}")
+                     time.sleep(2 * (attempt + 1))
+                     if attempt == retries - 1:
+                         return jobs # Return what we have
                 
                 except Exception as e:
-                    print(f"Error parsing LinkedIn response: {e}")
+                    print(f"Error searching LinkedIn jobs: {e}")
+                    break
             
-            time.sleep(1)  # Be respectful
+            time.sleep(1) # Delay between pages
             
-        except Exception as e:
-            print(f"Error searching LinkedIn jobs: {e}")
+            if len(jobs) >= limit:
+                break
         
         return jobs
     

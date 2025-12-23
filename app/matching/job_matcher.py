@@ -37,14 +37,15 @@ class JobMatcher:
         semantic_score = float(semantic_score) * 100  # Convert to 0-100
         
         # Skill matching
-        job_desc_lower = job_description.lower()
+        job_desc_lower = (job_description or "").lower()
         matched_skills = []
+        missing_skills = []
         for skill in resume_skills:
             if skill.lower() in job_desc_lower:
                 matched_skills.append(skill)
+            else:
+                missing_skills.append(skill)
         
-        # Extract job requirements (simple heuristic)
-        missing_skills = []
         if "required" in job_desc_lower:
             # Very basic parsing - in production use better NLP
             pass
@@ -52,6 +53,10 @@ class JobMatcher:
         # Calculate final score
         skill_bonus = (len(matched_skills) / max(len(resume_skills), 1)) * 30
         final_score = min(100, semantic_score * 0.7 + skill_bonus)
+        
+        # Salary Adjustment (if available in description)
+        # This is a heuristic since we don't always have structured salary
+        # If user has high expectations but job mentions low salary, penalty
         
         return {
             'match_score': round(final_score, 2),

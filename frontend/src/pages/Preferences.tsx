@@ -126,7 +126,7 @@ export default function Preferences() {
                         <label className="text-sm font-medium">Locations</label>
                         <div className="flex gap-2">
                             <Input
-                                placeholder="Add a location (e.g. San Francisco, Remote)"
+                                placeholder="Add a location (e.g. Bangalore, Remote)"
                                 value={locationInput}
                                 onChange={e => setLocationInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleAddLocation()}

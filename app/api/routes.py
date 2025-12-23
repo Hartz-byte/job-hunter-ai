@@ -231,7 +231,12 @@ async def match_jobs(query: str, limit: int = 10):
         
         # Search jobs
         print(f"Searching for: {query}")
-        jobs = scraper.search_all_sources(query, limit=limit)
+        # Search jobs
+        print(f"Searching for: {query}")
+        # Fetch generous amount to ensure we don't cut off sources like RemoteOK 
+        # that are appended after LinkedIn fills the quota
+        candidates_limit = 500 
+        jobs = scraper.search_all_sources(query, limit=candidates_limit)
         
         if not jobs:
             return {"total": 0, "jobs": []}
@@ -239,17 +244,20 @@ async def match_jobs(query: str, limit: int = 10):
         # Prepare resume text
         resume_text = f"{current_user_resume.summary} {' '.join(current_user_resume.technical_skills)}"
         
-        # Rank jobs
+        # Rank all candidates
         print("Ranking jobs by match (this may take a moment)...")
-        ranked = matcher.rank_jobs(
+        all_ranked = matcher.rank_jobs(
             resume_text,
             current_user_resume.technical_skills,
             jobs
         )
         
+        # User requested to see ALL fetched jobs, sorted by score
+        # We simply return the full list
+        
         # Format response
         result_jobs = []
-        for item in ranked[:limit]:
+        for item in all_ranked:
             result_jobs.append({
                 'job': item['job'],
                 'match_score': item['match']['match_score'],
@@ -264,6 +272,8 @@ async def match_jobs(query: str, limit: int = 10):
         }
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}

@@ -29,7 +29,7 @@ export const api = {
         return response.data;
     },
 
-    matchJobs: async (query: string, limit: number = 10) => {
+    matchJobs: async (query: string, limit: number = 30) => {
         const response = await axios.post(`${API_Base}/jobs/match?query=${query}&limit=${limit}`);
         return response.data;
     },
